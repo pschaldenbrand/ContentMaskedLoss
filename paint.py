@@ -229,7 +229,7 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
             for i in range(max_step):
                 stepnum = T * i / max_step
                 actions = actor(torch.cat([canvas, patch_img, stepnum, coord], 1))
-                canvas_discrete, res_discrete = decode(actions, canvas, discrete_colors=discrete_colors)
+                canvas_discrete, res_discrete = decode(actions, canvas_discrete, discrete_colors=discrete_colors)
                 canvas, res = decode(actions, canvas, discrete_colors=False)
                 if actions_divided is None:
                     actions_divided = actions
