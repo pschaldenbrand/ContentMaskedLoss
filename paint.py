@@ -225,6 +225,14 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
             canvas = np.transpose(canvas, (0, 3, 1, 2))
             canvas = torch.tensor(canvas).to(device).float()
             coord = coord.expand(canvas_cnt, 2, width, width)
+
+            canvas_discrete = canvas_discrete[0].detach().cpu().numpy()
+            canvas_discrete = np.transpose(canvas_discrete, (1, 2, 0))    
+            canvas_discrete = cv2.resize(canvas_discrete, (width * divide, width * divide))
+            canvas_discrete = large2small(canvas_discrete)
+            canvas_discrete = np.transpose(canvas_discrete, (0, 3, 1, 2))
+            canvas_discrete = torch.tensor(canvas_discrete).to(device).float()
+            
             T = T.expand(canvas_cnt, 1, width, width)
             for i in range(max_step):
                 stepnum = T * i / max_step
