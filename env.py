@@ -37,8 +37,8 @@ class Paint:
     def load_data_celeba(self):
         # CelebA
         global train_num, test_num
-        # for i in range(200000):
-        for i in range(3000):
+        for i in range(200000):
+        # for i in range(3000):
             img_id = '%06d' % (i + 1)
             try:
                 img = cv2.imread('./data/img_align_celeba/' + img_id + '.jpg', cv2.IMREAD_UNCHANGED)

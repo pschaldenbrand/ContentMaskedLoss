@@ -18,7 +18,7 @@ args = parser.parse_args()
 
 actions_whole, actions_divided, all_canvases, final_result \
         = paint(args.actor, args.renderer, 
-          max_step=3, img=args.img, div=2, discrete_colors=True)
+          max_step=args.max_step, img=args.img, div=args.divide, discrete_colors=True)
 
 save_actions(actions_whole, actions_divided)
 

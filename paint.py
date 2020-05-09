@@ -182,6 +182,7 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
     canvas = torch.zeros([1, 3, width, width]).to(device)
     if white_canvas:
         canvas = torch.ones([1, 3, width, width]).to(device)
+    canvas_discrete = canvas.detach().clone()
 
     patch_img = cv2.resize(img, (width * divide, width * divide))
     patch_img = large2small(patch_img)
@@ -203,15 +204,18 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
         for i in range(max_step):
             stepnum = T * i / max_step
             actions = actor(torch.cat([canvas, img, stepnum, coord], 1))
-            canvas, res = decode(actions, canvas, discrete_colors=discrete_colors)
+            # Use the non discrete canvas for acting, but save the discrete canvas if painting with finite colors
+            canvas_discrete, res_discrete = decode(actions, canvas_discrete, discrete_colors=discrete_colors)
+            canvas, res = decode(actions, canvas, discrete_colors=False)
+
             if actions_whole is None:
                 actions_whole = actions
             else:
                 actions_whole = torch.cat([actions_whole, actions], 1)
             for j in range(5):
                 # save_img(res[j], imgid)
-                #plot_canvas(res[j], imgid)
-                all_canvases.append(res_to_img(res[j], imgid)[...,::-1])
+                # plot_canvas(res[j], imgid)
+                all_canvases.append(res_to_img(res_discrete[j], imgid)[...,::-1])
                 imgid += 1
         if divide != 1:
             canvas = canvas[0].detach().cpu().numpy()
@@ -225,7 +229,8 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
             for i in range(max_step):
                 stepnum = T * i / max_step
                 actions = actor(torch.cat([canvas, patch_img, stepnum, coord], 1))
-                canvas, res = decode(actions, canvas, discrete_colors=discrete_colors)
+                canvas_discrete, res_discrete = decode(actions, canvas, discrete_colors=discrete_colors)
+                canvas, res = decode(actions, canvas, discrete_colors=False)
                 if actions_divided is None:
                     actions_divided = actions
                 else:
@@ -233,11 +238,11 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
 
                 for j in range(5):
                     # save_img(res[j], imgid, True)
-                    #plot_canvas(res[j], imgid, True)
-                    all_canvases.append(res_to_img(res[j], imgid, True)[...,::-1])
+                    # plot_canvas(res[j], imgid, True)
+                    all_canvases.append(res_to_img(res_discrete[j], imgid, True)[...,::-1])
                     imgid += 1
         
-        final_result = res_to_img(res[-1], imgid, True)[...,::-1]
+        final_result = res_to_img(res_discrete[-1], imgid, True)[...,::-1]
     return actions_whole, actions_divided, all_canvases, final_result
 
 
