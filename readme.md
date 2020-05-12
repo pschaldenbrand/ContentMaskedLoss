@@ -8,8 +8,11 @@ The brush stroke instructions can be fed to an [Arduino Braccio](https://store.a
 
 ## Robot Painting
 Generate the stroke instructions then have your robot arm paint them to have results like this:
-![Braccio Robot Arm Painter](image/david_lynch.jpg "A PHoto of Director David Lynch")
-![Braccio Robot Arm Painter](image/david_lynch_painting.jpg "Painting of David Lynch")
+![A Photo of Director David Lynch](image/david_lynch.jpg "A Photo of Director David Lynch") ![A Painting of Director David Lynch](image/david_lynch_painting.jpg "A Painting of Director David Lynch")
+
+<img src="/pschaldenbrand/HumanoidPainter/raw/master/image/david_lynch.jpg" alt="A Photo of Director David Lynch" title="A Photo of Director David Lynch" style="max-width: 49%;">
+<img src="/pschaldenbrand/HumanoidPainter/raw/master/image/david_lynch_painting.jpg" alt="A Painting of Director David Lynch" title="A Painting of Director David Lynch" style="max-width: 49%;">
+
 ### Download Pre-Trained Models
 The actor and renderer models can be downloaded from this box account.
 https://cmu.box.com/s/ojydzfocwjhbm4tsjbgt4ju5uwd6013c
