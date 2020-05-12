@@ -13,9 +13,9 @@ Generate the stroke instructions then have your robot arm paint them to have res
 <table>
 <tr>
     <td style="max-width: 49%;"> 
-    	<img src="image/david_lynch.jpg" alt="A Photo of Director David Lynch" title="A Photo of Director David Lynch" style="max-width: 250px;">
+    	<img src="image/david_lynch.jpg" alt="A Photo of Director David Lynch" title="A Photo of Director David Lynch" style="max-width: 250px;width:49%;">
 	</td><td style="max-width: 49%;">
-		<img src="image/david_lynch_painting.jpg" alt="A Painting of Director David Lynch" title="A Painting of Director David Lynch" style="max-width: 250px;;">
+		<img src="image/david_lynch_painting.jpg" alt="A Painting of Director David Lynch" title="A Painting of Director David Lynch" style="max-width: 250px;width:49%;">
 	</td>
 </tr>
 </table>
