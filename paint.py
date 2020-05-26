@@ -232,7 +232,7 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
             canvas_discrete = large2small(canvas_discrete)
             canvas_discrete = np.transpose(canvas_discrete, (0, 3, 1, 2))
             canvas_discrete = torch.tensor(canvas_discrete).to(device).float()
-            
+
             T = T.expand(canvas_cnt, 1, width, width)
             for i in range(max_step):
                 stepnum = T * i / max_step
@@ -374,3 +374,89 @@ def paint_until_face_detected(img, actor_fn, renderer_fn, max_strokes=750, img_w
                     if prob > 0.5:
                         return x_aligned, prob, imgid, c
     return None, None, None, c
+
+def paint_until_object_detected(img, actor_fn, renderer_fn, true_class, classifier, div=1,
+                                max_big_strokes=750, max_small_strokes=750, img_width=128, white_canvas=True):
+    global Decoder, width, divide, canvas_cnt, origin_shape
+    divide = div
+
+    from sketchy.classifier import SketchyClassifier
+
+    width = img_width
+
+    max_big_step = int(max_big_strokes / 5)
+    max_small_step = int(max_small_strokes / 5 / divide**2)
+    max_step = max_big_step + max_small_step
+
+    Decoder = FCN()
+    Decoder.load_state_dict(torch.load(renderer_fn))
+
+    actor = ResNet(9, 18, 65) # action_bundle = 5, 65 = 5 * 13
+    actor.load_state_dict(torch.load(actor_fn))
+    actor = actor.to(device).eval()
+    Decoder = Decoder.to(device).eval()
+
+    imgid = 0
+    canvas_cnt = divide * divide
+    T = torch.ones([1, 1, width, width], dtype=torch.float32).to(device)
+    img = cv2.imread(img, cv2.IMREAD_COLOR)
+    origin_shape = (img.shape[1], img.shape[0])
+
+    coord = torch.zeros([1, 2, width, width])
+    for i in range(width):
+        for j in range(width):
+            coord[0, 0, i, j] = i / (width - 1.)
+            coord[0, 1, i, j] = j / (width - 1.)
+    coord = coord.to(device) # Coordconv
+
+    canvas = torch.zeros([1, 3, width, width]).to(device)
+    if white_canvas:
+        canvas = torch.ones([1, 3, width, width]).to(device)
+
+    patch_img = cv2.resize(img, (width * divide, width * divide))
+    patch_img = large2small(patch_img)
+    patch_img = np.transpose(patch_img, (0, 3, 1, 2))
+    patch_img = torch.tensor(patch_img).to(device).float() / 255.
+
+    img = cv2.resize(img, (width, width))
+    img = img.reshape(1, width, width, 3)
+    img = np.transpose(img, (0, 3, 1, 2))
+    img = torch.tensor(img).to(device).float() / 255.
+        
+    with torch.no_grad():
+        for i in range(max_big_step):
+            stepnum = T * i / max_step
+            actions = actor(torch.cat([canvas, img, stepnum, coord], 1))
+            canvas, res = decode(actions, canvas, discrete_colors=False)
+            for j in range(5):
+                imgid += 1
+                c = res_to_img(res[j], imgid)[...,::-1]
+                if ((imgid % 5) == 0) and (imgid > 20):
+                    c_norm = cv2.resize(c, (classifier.width, classifier.width))
+                    c_norm = classifier.normalize(c_norm)
+                    pred_class, confidence = classifier.classify(c_norm.unsqueeze(0).to(device))
+                    if pred_class[0] == true_class and confidence[0] > 0.013:
+                        return imgid, c
+        if divide != 1:
+            canvas = canvas[0].detach().cpu().numpy()
+            canvas = np.transpose(canvas, (1, 2, 0))    
+            canvas = cv2.resize(canvas, (width * divide, width * divide))
+            canvas = large2small(canvas)
+            canvas = np.transpose(canvas, (0, 3, 1, 2))
+            canvas = torch.tensor(canvas).to(device).float()
+            coord = coord.expand(canvas_cnt, 2, width, width)
+
+            T = T.expand(canvas_cnt, 1, width, width)
+            for i in range(max_small_step):
+                stepnum = T * i / max_step
+                actions = actor(torch.cat([canvas, patch_img, stepnum, coord], 1))
+                canvas, res = decode(actions, canvas, discrete_colors=False)
+                for j in range(5):
+                    imgid += divide**2
+                    c = res_to_img(res[j], imgid, divide=True)[...,::-1]
+                    c_norm = cv2.resize(c, (classifier.width, classifier.width))
+                    c_norm = classifier.normalize(c_norm)
+                    pred_class, confidence = classifier.classify(c_norm.unsqueeze(0).to(device))
+                    if pred_class[0] == true_class and confidence[0] > 0.013:
+                        return imgid, c
+    return None, c

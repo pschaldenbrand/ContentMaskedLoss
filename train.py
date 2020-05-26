@@ -11,7 +11,7 @@ import datetime
 
 date_and_time = datetime.datetime.now()
 run_name = 'painter_' + date_and_time.strftime("%m_%d__%H_%M_%S")
-writer = TensorBoard('train_log/{}'.format(run_name))
+writer = TensorBoard('train_log2/{}'.format(run_name))
 
 if not os.path.exists('model'):
     os.mkdir('model')
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     parser.add_argument('--loss_fcn', default='cml1', choices=['gan', 'l2', 'l1', 'cm', 'cml1'])
     parser.add_argument('--canvas_color', default='white', choices=['white','black'])
     parser.add_argument('--renderer', default='renderer.pkl', type=str, help='Filename of renderer used to paint')
-    parser.add_argument('--dataset', default='celeba', choices=['celeba','pascal'])
+    parser.add_argument('--dataset', default='celeba', choices=['celeba','pascal', 'sketchy'])
 
     args = parser.parse_args()    
     args.output = get_output_folder(args.output, "Paint")

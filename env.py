@@ -60,7 +60,10 @@ class Paint:
 
         i = 0
         img_dir = './VOC2012/JPEGImages/'
+        fn_ar = []
         for filename in os.listdir(img_dir):
+            fn_ar.append(filename)
+        for filename in sorted(fn_ar): # Sort so that every time we redo this, we get the same test images
             img_id = '%06d' % (i + 1)
             try:
                 img = cv2.imread(os.path.join(img_dir, filename), cv2.IMREAD_UNCHANGED)
@@ -75,6 +78,34 @@ class Paint:
                 if (i + 1) % 5000 == 0:                    
                     print('loaded {} images'.format(i + 1))
             i += 1
+        print('finish loading data, {} training images, {} testing images'.format(str(train_num), str(test_num)))
+
+    def load_data_sketchy(self):
+        # Sketchy dataset. From https://sketchy.eye.gatech.edu/
+        global train_num, test_num
+
+        from sketchy.classifier import SketchyClassifier
+
+        i = 0
+        for class_name in SketchyClassifier.class_names:
+            class_dir = os.path.join(SketchyClassifier.sketchy_img_dir, class_name)
+            class_img_ind = 0
+            for filename in sorted(os.listdir(class_dir)): # Sort so that every time we redo this, we get the same test images
+                img_id = '%06d' % (i + 1)
+                try:
+                    img = cv2.imread(os.path.join(class_dir, filename), cv2.IMREAD_UNCHANGED)
+                    img = cv2.resize(img, (width, width))
+                    if class_img_ind < 90:                
+                        train_num += 1
+                        img_train.append(img)
+                    else:
+                        test_num += 1
+                        img_test.append(img)
+                finally:
+                    if (i + 1) % 5000 == 0:                    
+                        print('loaded {} images'.format(i + 1))
+                i += 1
+                class_img_ind += 1
         print('finish loading data, {} training images, {} testing images'.format(str(train_num), str(test_num)))
         
     def pre_data(self, id, test):

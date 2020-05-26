@@ -17,6 +17,8 @@ class fastenv():
             self.env.load_data_celeba()
         elif dataset == 'pascal':
             self.env.load_data_pascal()
+        elif dataset == 'sketchy':
+            self.env.load_data_sketchy()
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
         self.writer = writer
