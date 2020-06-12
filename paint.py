@@ -91,6 +91,34 @@ def decode(x, canvas, n_strokes=5, discrete_colors=True, width=128): # b * (10 +
         res.append(canvas)
     return canvas, res
 
+def decode_multiple_renderers(x, canvas, episode_num, n_strokes=5, discrete_colors=True, width=128): # b * (10 + 3)
+    dec_ind = 0
+    d = decoders[-1]
+    for cutoff in decoder_cutoff:
+        if episode_num < cutoff:
+            d = decoders[dec_ind]
+            break
+        dec_ind += 1
+
+    x = x.view(-1, 10 + 3)
+    stroke = 1 - d(x[:, :10])
+    stroke = stroke.view(-1, width, width, 1)
+
+    color_stroke = stroke * x[:, -3:].view(-1, 1, 1, 3)
+    if discrete_colors:
+        color_stroke = stroke * discrete_color(x[:, -3:]).view(-1, 1, 1, 3)
+
+    stroke = stroke.permute(0, 3, 1, 2)
+    color_stroke = color_stroke.permute(0, 3, 1, 2)
+    stroke = stroke.view(-1, n_strokes, 1, width, width)
+    color_stroke = color_stroke.view(-1, n_strokes, 3, width, width)
+    res = []
+
+    for i in range(n_strokes):
+        canvas = canvas * (1 - stroke[:, i]) + color_stroke[:, i]
+        res.append(canvas)
+    return canvas, res
+
 def small2large(x):
     # (d * d, width, width) -> (d * width, d * width)    
     x = x.reshape(divide, divide, width, width, -1)
@@ -151,13 +179,18 @@ def plot_canvas(res, imgid, divide=False):
 
 def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
           img='../image/vangogh.png', discrete_colors=True, n_colors=10,
-          white_canvas=True, built_in_features=False):
+          white_canvas=True, built_in_features=False, use_multiple_renderers=False):
     global Decoder, width, divide, canvas_cnt, origin_shape
     width = img_width
     divide = div
-    
-    Decoder = FCN()
-    Decoder.load_state_dict(torch.load(renderer_fn))
+
+    if not use_multiple_renderers:
+        Decoder = FCN()
+        Decoder.load_state_dict(torch.load(renderer_fn))
+        Decoder = Decoder.to(device).eval()
+    else:
+        global decoders, decoder_cutoff
+        from DRL.ddpg import decoders, decoder_cutoff
 
     if built_in_features:
         actor = ResNet(10, 18, 65) # action_bundle = 5, 65 = 5 * 13
@@ -166,7 +199,6 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
         actor = ResNet(9, 18, 65) # action_bundle = 5, 65 = 5 * 13
         actor.load_state_dict(torch.load(actor_fn))
     actor = actor.to(device).eval()
-    Decoder = Decoder.to(device).eval()
     
     # Get the allowed colors if it's supposed to be discrete
     if discrete_colors:
@@ -220,9 +252,17 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
             else:
                 state = torch.cat([canvas, img, stepnum, coord], 1)
             actions = actor(state)
+
             # Use the non discrete canvas for acting, but save the discrete canvas if painting with finite colors
-            canvas_discrete, res_discrete = decode(actions, canvas_discrete, discrete_colors=discrete_colors)
-            canvas, res = decode(actions, canvas, discrete_colors=False)
+            if use_multiple_renderers:
+                canvas_discrete, res_discrete = decode_multiple_renderers(actions, canvas_discrete, i, discrete_colors=discrete_colors)
+            else:
+                canvas_discrete, res_discrete = decode(actions, canvas_discrete, discrete_colors=discrete_colors)
+            
+            if use_multiple_renderers:
+                canvas, res = decode_multiple_renderers(actions, canvas, i, discrete_colors=False)
+            else:
+                canvas, res = decode(actions, canvas, discrete_colors=False)
 
             if actions_whole is None:
                 actions_whole = actions
@@ -310,6 +350,54 @@ def save_actions(actions_whole, actions_divided, group_colors=True, group_amount
     df.to_csv(os.path.join(actions_dir, 'actions_all.csv'), sep=",", header=False, index=False, float_format='%.5f')
     df[:int(actions_whole.shape[1]/13)].to_csv(os.path.join(actions_dir, 'actions_big.csv'), sep=",", header=False, index=False, float_format='%.5f')
     df[int(actions_whole.shape[1]/13):] .to_csv(os.path.join(actions_dir, 'actions_small.csv'), sep=",", header=False, index=False, float_format='%.5f')
+
+    # Save the colors used as an image so you know how to mix the paints
+    n_colors = len(allowed_colors)
+    fig, ax = plt.subplots(1, n_colors, figsize=(2*n_colors, 2))
+    i = 0 
+    w = 128
+    for c in allowed_colors:
+        # print('[', int(255*c[2]), ', ', int(255*c[1]), ', ', int(255*c[0]), '],', end='', sep='')
+        num_uses = np.sum(act[:,12] == i)
+        ax[i].imshow(np.concatenate((np.ones((w,w,1))*c[2], np.ones((w,w,1))*c[1], np.ones((w,w,1))*c[0]), axis=-1))
+        ax[i].set_xticks([])
+        ax[i].set_yticks([])
+        ax[i].set_title(i)
+        ax[i].set_xlabel(str(num_uses) + ' uses')
+        i += 1
+
+    plt.savefig(os.path.join(actions_dir, 'colors.png'))
+
+def save_actions_multiple_renderers(actions, group_colors=True, group_amount=50):
+    # x0, y0, x1, y1, x2, y2, z0, z2, w0, w2 , R, G, B
+    if actions is None: actions = np.array([[]])
+
+    act = np.empty((int(actions.shape[1] / 13), 13))
+    c = 0
+
+    # Add the actions that were from looking at the whole canvas
+    for i in range(0, actions.shape[1], 13):
+        act[c,:] = actions[0,i:i+13].cpu().numpy().copy()
+        act[c,10:13] = discrete_color(actions[0,i+10:i+13].unsqueeze(0), just_inds=True).cpu().numpy()
+        c += 1
+
+    from DRL.ddpg import decoder_cutoff, n_strokes
+
+    decoder_cutoff.append(100)
+    prev_cutoff = 0
+    brush_ind = len(decoder_cutoff)
+    for cutoff in decoder_cutoff:
+        actions_this_brush_size = np.copy(act[prev_cutoff*n_strokes:cutoff*n_strokes])
+        if group_colors:
+            r = True
+            for i in range(0,len(actions_this_brush_size),group_amount):
+                actions_this_brush_size[i:i+group_amount] = sorted(copy.deepcopy(actions_this_brush_size[i:i+group_amount]),key=lambda l:l[12], reverse=r)
+                r = not r
+        df = pd.DataFrame(actions_this_brush_size)
+        df.to_csv(os.path.join(actions_dir, 'actions' + str(brush_ind) + '.csv'), sep=",", header=False, index=False, float_format='%.5f')
+
+        prev_cutoff = cutoff
+        brush_ind -=1
 
     # Save the colors used as an image so you know how to mix the paints
     n_colors = len(allowed_colors)
