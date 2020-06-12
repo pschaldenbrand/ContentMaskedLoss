@@ -150,7 +150,7 @@ def plot_canvas(res, imgid, divide=False):
     plt.show()
 
 def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
-          img='../image/vangogh.png', discrete_colors=True, n_colors=6,
+          img='../image/vangogh.png', discrete_colors=True, n_colors=10,
           white_canvas=True, built_in_features=False):
     global Decoder, width, divide, canvas_cnt, origin_shape
     width = img_width
@@ -274,7 +274,7 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
     return actions_whole, actions_divided, all_canvases, final_result
 
 
-def save_actions(actions_whole, actions_divided, group_colors=True, group_amount=15):
+def save_actions(actions_whole, actions_divided, group_colors=True, group_amount=50):
     # x0, y0, x1, y1, x2, y2, z0, z2, w0, w2 , R, G, B
     if actions_whole is None: actions_whole = np.array([[]])
     if actions_divided is None: actions_divided = np.array([[]])

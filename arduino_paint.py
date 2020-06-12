@@ -146,9 +146,13 @@ def runTest(td):
 
 import serial
 import time
+import argparse
 
-print ()
-print ()
+parser = argparse.ArgumentParser(description='Send painting instructions to Arduino robot arm')
+
+parser.add_argument('--instructions_file', default='arduino_actions/actions_all.csv', type=str, help='CSV Brush stroke insturction file')
+
+args = parser.parse_args()
 
 # NOTE the user must ensure that the serial port and baudrate are correct
 # serPort = "/dev/ttyS80"
@@ -164,7 +168,7 @@ endMarker = 62
 
 waitForArduino()
 
-stroke_file = open('arduino_actions/actions_all.csv', 'r') 
+stroke_file = open(args.instructions_file, 'r') 
 
 lines = stroke_file.readlines()
 stroke_file.close()
