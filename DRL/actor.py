@@ -82,7 +82,6 @@ class ResNet(nn.Module):
         self.in_planes = 64
 
         block, num_blocks = cfg(depth)
-
         self.conv1 = conv3x3(num_inputs, 64, 2)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=2)

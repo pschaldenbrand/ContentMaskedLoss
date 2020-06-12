@@ -9,10 +9,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class fastenv():
     def __init__(self, 
                  max_episode_length=10, env_batch=64, \
-                 writer=None, canvas_color='white', dataset='celeba'):
+                 writer=None, canvas_color='white', loss_fcn='cml1',
+                 dataset='celeba', use_multiple_renderers=False):
         self.max_episode_length = max_episode_length
         self.env_batch = env_batch
-        self.env = Paint(self.env_batch, self.max_episode_length, canvas_color=canvas_color)
+        self.env = Paint(self.env_batch, self.max_episode_length, loss_fcn=loss_fcn, canvas_color=canvas_color, 
+                         use_multiple_renderers=use_multiple_renderers)
         if dataset == 'celeba':
             self.env.load_data_celeba()
         elif dataset == 'pascal':
@@ -38,9 +40,9 @@ class fastenv():
                     self.writer.add_image(str(self.env.imgid[i]) + '/_target.png', gt, log)
                     self.writer.add_image(str(self.env.imgid[i]) + '/_canvas.png', canvas, log)
     
-    def step(self, action):
+    def step(self, action, episode_num):
         with torch.no_grad():
-            ob, r, d, _ = self.env.step(torch.tensor(action).to(device))
+            ob, r, d, _ = self.env.step(torch.tensor(action).to(device), episode_num)
         if d[0]:
             if not self.test:
                 self.dist = self.get_dist()

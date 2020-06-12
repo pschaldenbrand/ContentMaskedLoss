@@ -10,6 +10,8 @@ from DRL.critic import *
 from DRL.wgan import *
 from utils.util import *
 
+import copy
+
 from DRL.content_loss import *
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -24,6 +26,17 @@ for i in range(128):
 coord = coord.to(device)
 
 criterion = nn.MSELoss()
+
+decoder_fns = ['renderer_models/renderer0.1999999999999999.pkl', 
+               'renderer_models/renderer0.09999999999999985.pkl', 
+               'renderer_models/renderer0.049999999999999864.pkl', 
+               'renderer_models/renderer0.01.pkl']
+decoder_cutoff = [10, 30, 65]
+decoders = []
+for decoder_fn in decoder_fns:
+    dec = FCN()
+    dec.load_state_dict(torch.load(decoder_fn))
+    decoders.append(copy.deepcopy(dec).to(device))
 
 Decoder = FCN()
 
@@ -42,6 +55,27 @@ def decode(x, canvas): # b * (10 + 3)
         canvas = canvas * (1 - stroke[:, i]) + color_stroke[:, i]
     return canvas
 
+def decode_multiple_renderers(x, canvas, episode_num): # b * (10 + 3)
+    dec_ind = 0
+    d = decoders[-1]
+    for cutoff in decoder_cutoff:
+        if episode_num < cutoff:
+            d = decoders[dec_ind]
+            break
+        dec_ind += 1
+
+    x = x.view(-1, 10 + 3)
+    stroke = 1 - d(x[:, :10])
+    stroke = stroke.view(-1, 128, 128, 1)
+    color_stroke = stroke * x[:, -3:].view(-1, 1, 1, 3)
+    stroke = stroke.permute(0, 3, 1, 2)
+    color_stroke = color_stroke.permute(0, 3, 1, 2)
+    stroke = stroke.view(-1, n_strokes, 1, 128, 128)
+    color_stroke = color_stroke.view(-1, n_strokes, 3, 128, 128)
+    for i in range(n_strokes):
+        canvas = canvas * (1 - stroke[:, i]) + color_stroke[:, i]
+    return canvas
+
 def cal_trans(s, t):
     return (s.transpose(0, 3) * t).transpose(0, 3)
     
@@ -49,19 +83,26 @@ class DDPG(object):
     def __init__(self, batch_size=64, env_batch=1, max_step=40, \
                  tau=0.001, discount=0.9, rmsize=800, \
                  writer=None, resume=None, output_path=None, \
-                 loss_fcn='cml1', renderer_fn='renderer.pkl'):
+                 loss_fcn='cml1', renderer_fn='renderer.pkl',
+                 use_multiple_renderers=False):
 
         self.max_step = max_step
         self.env_batch = env_batch
         self.batch_size = batch_size
-        self.loss_fcn = loss_fcn  
+        self.loss_fcn = loss_fcn
+        self.use_multiple_renderers = use_multiple_renderers
 
-        self.actor = ResNet(9, 18, 13*n_strokes) # target, canvas, stepnum, coordconv 3 + 3 + 1 + 2
-        self.actor_target = ResNet(9, 18, 13*n_strokes)
-        self.critic = ResNet_wobn(3 + 9, 18, 1) # add the last canvas for better prediction
-        self.critic_target = ResNet_wobn(3 + 9, 18, 1) 
+        state_size = 9
+        if loss_fcn == 'cm' or loss_fcn == 'cml1':
+            state_size = 10
 
-        Decoder.load_state_dict(torch.load(renderer_fn))
+        self.actor = ResNet(state_size, 18, 13*n_strokes) # target, canvas, stepnum, coordconv 3 + 3 + 1 + 2
+        self.actor_target = ResNet(state_size, 18, 13*n_strokes)
+        self.critic = ResNet_wobn(3 + state_size, 18, 1) # add the last canvas for better prediction
+        self.critic_target = ResNet_wobn(3 + state_size, 18, 1) 
+
+        if not use_multiple_renderers:
+            Decoder.load_state_dict(torch.load(renderer_fn))
 
         self.actor_optim  = Adam(self.actor.parameters(), lr=1e-2)
         self.critic_optim  = Adam(self.critic.parameters(), lr=1e-2)
@@ -88,7 +129,15 @@ class DDPG(object):
         self.choose_device()        
 
     def play(self, state, target=False):
-        state = torch.cat((state[:, :6].float() / 255, state[:, 6:7].float() / self.max_step, coord.expand(state.shape[0], 2, 128, 128)), 1)
+        if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':
+            state = torch.cat((state[:, :6].float() / 255,  #canvas and target \
+                               state[:, 6:7].float() / 255, # mask \
+                               state[:, 6+1:7+1].float() / self.max_step, # step num \
+                               coord.expand(state.shape[0], 2, 128, 128)), 1)
+        else:
+            state = torch.cat((state[:, :6].float() / 255,  #canvas and target \
+                               state[:, 6:7].float() / self.max_step, # step num \
+                               coord.expand(state.shape[0], 2, 128, 128)), 1)
         if target:
             return self.actor_target(state)
         else:
@@ -103,11 +152,18 @@ class DDPG(object):
             self.writer.add_scalar('train/gan_real', real, self.log)
             self.writer.add_scalar('train/gan_penal', penal, self.log)       
         
-    def evaluate(self, state, action, target=False):
+    def evaluate(self, state, action, episode_num, target=False):
         T = state[:, 6 : 7]
         gt = state[:, 3 : 6].float() / 255
         canvas0 = state[:, :3].float() / 255
-        canvas1 = decode(action, canvas0)
+        if self.use_multiple_renderers:
+            canvas1 = decode_multiple_renderers(action, canvas0, episode_num)
+        else:
+            canvas1 = decode(action, canvas0)
+
+        if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':
+            T = state[:, 6+1 : 7+1]
+            mask = state[:, 6:7].float() / 255
 
         reward = 0
         clip = 0.2
@@ -124,11 +180,11 @@ class DDPG(object):
             l1_1[l1_1 > clip] = clip
             reward = (l1_0).mean(1).mean(1).mean(1) - (l1_1).mean(1).mean(1).mean(1)
         elif self.loss_fcn == 'cm':
-            mask = get_l2_mask(gt)
+            #mask = get_l2_mask(gt)
 
             reward = ((canvas0 - gt) ** 2 * mask).mean(1).mean(1).mean(1) - ((canvas1 - gt) ** 2  * mask).mean(1).mean(1).mean(1)
         elif self.loss_fcn == 'cml1':
-            mask = get_l2_mask(gt)
+            #mask = get_l2_mask(gt)
 
             l1_0 = torch.abs(canvas0-gt)
             l1_0[l1_0 > clip] = clip
@@ -139,7 +195,10 @@ class DDPG(object):
             reward = (l1_0 * mask).mean(1).mean(1).mean(1) - (l1_1 * mask).mean(1).mean(1).mean(1)
 
         coord_ = coord.expand(state.shape[0], 2, 128, 128)
-        merged_state = torch.cat([canvas0, canvas1, gt, (T + 1).float() / self.max_step, coord_], 1)
+        if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':
+            merged_state = torch.cat([canvas0, canvas1, gt, mask, (T + 1).float() / self.max_step, coord_], 1)
+        else:
+            merged_state = torch.cat([canvas0, canvas1, gt, (T + 1).float() / self.max_step, coord_], 1)
         # canvas0 is not necessarily added
         if target:
             Q = self.critic_target(merged_state)
@@ -151,7 +210,7 @@ class DDPG(object):
                 self.writer.add_scalar('train/reward', reward.mean(), self.log)
             return (Q + reward), reward
     
-    def update_policy(self, lr):
+    def update_policy(self, lr, episode_num):
         self.log += 1
         
         for param_group in self.critic_optim.param_groups:
@@ -168,10 +227,10 @@ class DDPG(object):
         
         with torch.no_grad():
             next_action = self.play(next_state, True)
-            target_q, _ = self.evaluate(next_state, next_action, True)
+            target_q, _ = self.evaluate(next_state, next_action, episode_num, True)
             target_q = self.discount * ((1 - terminal.float()).view(-1, 1)) * target_q
                 
-        cur_q, step_reward = self.evaluate(state, action)
+        cur_q, step_reward = self.evaluate(state, action, episode_num)
         target_q += step_reward.detach()
         
         value_loss = criterion(cur_q, target_q)
@@ -180,7 +239,7 @@ class DDPG(object):
         self.critic_optim.step()
 
         action = self.play(state)
-        pre_q, _ = self.evaluate(state.detach(), action)
+        pre_q, _ = self.evaluate(state.detach(), action, episode_num)
         policy_loss = -pre_q.mean()
         self.actor.zero_grad()
         policy_loss.backward(retain_graph=True)
@@ -256,7 +315,8 @@ class DDPG(object):
         self.critic_target.train()
     
     def choose_device(self):
-        Decoder.to(device)
+        if not self.use_multiple_renderers:
+            Decoder.to(device)
         self.actor.to(device)
         self.actor_target.to(device)
         self.critic.to(device)

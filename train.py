@@ -11,7 +11,7 @@ import datetime
 
 date_and_time = datetime.datetime.now()
 run_name = 'painter_' + date_and_time.strftime("%m_%d__%H_%M_%S")
-writer = TensorBoard('train_log2/{}'.format(run_name))
+writer = TensorBoard('train_log_multiple_renderers/{}'.format(run_name))
 
 if not os.path.exists('model'):
     os.mkdir('model')
@@ -38,7 +38,7 @@ def train(agent, env, evaluate):
             observation = env.reset()
             agent.reset(observation, noise_factor)    
         action = agent.select_action(observation, noise_factor=noise_factor)
-        observation, reward, done, _ = env.step(action)
+        observation, reward, done, _ = env.step(action, episode_steps)
         agent.observe(reward, observation, done, step)
         if (episode_steps >= max_step and max_step):
             if step > args.warmup:
@@ -55,16 +55,15 @@ def train(agent, env, evaluate):
             tot_Q = 0.
             tot_value_loss = 0.
             if step > args.warmup:
-                if step < 30000:
-                    lr = (3e-6, 1e-5)
-                elif step < 500 * max_step:
-                    lr = (1e-6, 1e-6)
-                elif step < 2000 * max_step:
-                    lr = (1e-4, 3e-4)
-                else:
-                    lr = (3e-5, 1e-4)
+                lr = (3e-6, 1e-5)
+                # if step < 10000 * max_step:
+                #     lr = (3e-4, 1e-3)
+                # elif step < 20000 * max_step:
+                #     lr = (1e-4, 3e-4)
+                # else:
+                #     lr = (3e-5, 1e-4)
                 for i in range(episode_train_times):
-                    Q, value_loss = agent.update_policy(lr)
+                    Q, value_loss = agent.update_policy(lr, episode_steps)
                     tot_Q += Q.data.cpu().numpy()
                     tot_value_loss += value_loss.data.cpu().numpy()
                 writer.add_scalar('train/critic_lr', lr[0], step)
@@ -104,6 +103,7 @@ if __name__ == "__main__":
     parser.add_argument('--canvas_color', default='white', choices=['white','black'])
     parser.add_argument('--renderer', default='renderer.pkl', type=str, help='Filename of renderer used to paint')
     parser.add_argument('--dataset', default='celeba', choices=['celeba','pascal', 'sketchy'])
+    parser.add_argument('--use_multiple_renderers', default=False, type=bool, help='Use multiple neural renderers')
 
     args = parser.parse_args()    
     args.output = get_output_folder(args.output, "Paint")
@@ -115,10 +115,10 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
     from DRL.ddpg import DDPG
     from DRL.multi import fastenv
-    fenv = fastenv(args.max_step, args.env_batch, writer, args.canvas_color, args.dataset)
+    fenv = fastenv(args.max_step, args.env_batch, writer, args.canvas_color, args.loss_fcn, args.dataset, args.use_multiple_renderers)
     agent = DDPG(args.batch_size, args.env_batch, args.max_step, \
                  args.tau, args.discount, args.rmsize, \
-                 writer, args.resume, args.output, args.loss_fcn, args.renderer)
+                 writer, args.resume, args.output, args.loss_fcn, args.renderer, args.use_multiple_renderers)
     evaluate = Evaluator(args, writer)
     print('observation_space', fenv.observation_space, 'action_space', fenv.action_space)
 

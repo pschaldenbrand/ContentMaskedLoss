@@ -22,6 +22,8 @@ import copy
 import pandas as pd
 import math
 
+from DRL.content_loss import *
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 output_dir = 'output'
 actions_dir = 'arduino_actions'
@@ -149,7 +151,7 @@ def plot_canvas(res, imgid, divide=False):
 
 def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
           img='../image/vangogh.png', discrete_colors=True, n_colors=6,
-          white_canvas=True):
+          white_canvas=True, built_in_features=False):
     global Decoder, width, divide, canvas_cnt, origin_shape
     width = img_width
     divide = div
@@ -157,8 +159,12 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
     Decoder = FCN()
     Decoder.load_state_dict(torch.load(renderer_fn))
 
-    actor = ResNet(9, 18, 65) # action_bundle = 5, 65 = 5 * 13
-    actor.load_state_dict(torch.load(actor_fn))
+    if built_in_features:
+        actor = ResNet(10, 18, 65) # action_bundle = 5, 65 = 5 * 13
+        actor.load_state_dict(torch.load(actor_fn))
+    else:
+        actor = ResNet(9, 18, 65) # action_bundle = 5, 65 = 5 * 13
+        actor.load_state_dict(torch.load(actor_fn))
     actor = actor.to(device).eval()
     Decoder = Decoder.to(device).eval()
     
@@ -171,6 +177,7 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
     T = torch.ones([1, 1, width, width], dtype=torch.float32).to(device)
     img = cv2.imread(img, cv2.IMREAD_COLOR)
     origin_shape = (img.shape[1], img.shape[0])
+
 
     coord = torch.zeros([1, 2, width, width])
     for i in range(width):
@@ -190,6 +197,10 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
     patch_img = torch.tensor(patch_img).to(device).float() / 255.
 
     img = cv2.resize(img, (width, width))
+    mask = None
+    if built_in_features:
+        mask = get_l2_mask(torch.unsqueeze(torch.tensor(np.transpose(img.astype('float32'), (2, 0, 1))), 0) / 255)[:,0,:,:]
+        mask = mask.unsqueeze(0)
     img = img.reshape(1, width, width, 3)
     img = np.transpose(img, (0, 3, 1, 2))
     img = torch.tensor(img).to(device).float() / 255.
@@ -203,7 +214,12 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
             max_step = max_step // 2
         for i in range(max_step):
             stepnum = T * i / max_step
-            actions = actor(torch.cat([canvas, img, stepnum, coord], 1))
+
+            if built_in_features:
+                state = torch.cat([canvas, img, mask.float(), stepnum, coord], 1)
+            else:
+                state = torch.cat([canvas, img, stepnum, coord], 1)
+            actions = actor(state)
             # Use the non discrete canvas for acting, but save the discrete canvas if painting with finite colors
             canvas_discrete, res_discrete = decode(actions, canvas_discrete, discrete_colors=discrete_colors)
             canvas, res = decode(actions, canvas, discrete_colors=False)
@@ -236,7 +252,11 @@ def paint(actor_fn, renderer_fn, max_step=40, div=5, img_width=128,
             T = T.expand(canvas_cnt, 1, width, width)
             for i in range(max_step):
                 stepnum = T * i / max_step
-                actions = actor(torch.cat([canvas, patch_img, stepnum, coord], 1))
+                if built_in_features:
+                    state = torch.cat([canvas, patch_img, mask, stepnum, coord], 1)
+                else:
+                    state = torch.cat([canvas, patch_img, stepnum, coord], 1)
+                actions = actor(state)
                 canvas_discrete, res_discrete = decode(actions, canvas_discrete, discrete_colors=discrete_colors)
                 canvas, res = decode(actions, canvas, discrete_colors=False)
                 if actions_divided is None:
@@ -376,7 +396,8 @@ def paint_until_face_detected(img, actor_fn, renderer_fn, max_strokes=750, img_w
     return None, None, None, c
 
 def paint_until_object_detected(img, actor_fn, renderer_fn, true_class, classifier, div=1,
-                                max_big_strokes=750, max_small_strokes=750, img_width=128, white_canvas=True):
+                                max_big_strokes=750, max_small_strokes=750, img_width=128, 
+                                white_canvas=True, built_in_features=False):
     global Decoder, width, divide, canvas_cnt, origin_shape
     divide = div
 
@@ -391,8 +412,12 @@ def paint_until_object_detected(img, actor_fn, renderer_fn, true_class, classifi
     Decoder = FCN()
     Decoder.load_state_dict(torch.load(renderer_fn))
 
-    actor = ResNet(9, 18, 65) # action_bundle = 5, 65 = 5 * 13
-    actor.load_state_dict(torch.load(actor_fn))
+    if built_in_features:
+        actor = ResNet(10, 18, 65) # action_bundle = 5, 65 = 5 * 13
+        actor.load_state_dict(torch.load(actor_fn))
+    else:
+        actor = ResNet(9, 18, 65) # action_bundle = 5, 65 = 5 * 13
+        actor.load_state_dict(torch.load(actor_fn))
     actor = actor.to(device).eval()
     Decoder = Decoder.to(device).eval()
 
@@ -419,6 +444,10 @@ def paint_until_object_detected(img, actor_fn, renderer_fn, true_class, classifi
     patch_img = torch.tensor(patch_img).to(device).float() / 255.
 
     img = cv2.resize(img, (width, width))
+    mask = None
+    if built_in_features:
+        mask = get_l2_mask(torch.unsqueeze(torch.tensor(np.transpose(img.astype('float32'), (2, 0, 1))), 0) / 255)[:,0,:,:]
+        mask = mask.unsqueeze(0)
     img = img.reshape(1, width, width, 3)
     img = np.transpose(img, (0, 3, 1, 2))
     img = torch.tensor(img).to(device).float() / 255.
@@ -426,12 +455,16 @@ def paint_until_object_detected(img, actor_fn, renderer_fn, true_class, classifi
     with torch.no_grad():
         for i in range(max_big_step):
             stepnum = T * i / max_step
-            actions = actor(torch.cat([canvas, img, stepnum, coord], 1))
+            if built_in_features:
+                state = torch.cat([canvas, img, mask.float(), stepnum, coord], 1)
+            else:
+                state = torch.cat([canvas, img, stepnum, coord], 1)
+            actions = actor(state)
             canvas, res = decode(actions, canvas, discrete_colors=False)
             for j in range(5):
                 imgid += 1
                 c = res_to_img(res[j], imgid)[...,::-1]
-                if ((imgid % 5) == 0) and (imgid > 20):
+                if ((imgid % 5) == 0) and (imgid > 10):
                     c_norm = cv2.resize(c, (classifier.width, classifier.width))
                     c_norm = classifier.normalize(c_norm)
                     pred_class, confidence = classifier.classify(c_norm.unsqueeze(0).to(device))
@@ -449,7 +482,11 @@ def paint_until_object_detected(img, actor_fn, renderer_fn, true_class, classifi
             T = T.expand(canvas_cnt, 1, width, width)
             for i in range(max_small_step):
                 stepnum = T * i / max_step
-                actions = actor(torch.cat([canvas, patch_img, stepnum, coord], 1))
+                if built_in_features:
+                    state = torch.cat([canvas, patch_img, mask, stepnum, coord], 1)
+                else:
+                    state = torch.cat([canvas, patch_img, stepnum, coord], 1)
+                actions = actor(state)
                 canvas, res = decode(actions, canvas, discrete_colors=False)
                 for j in range(5):
                     imgid += divide**2
