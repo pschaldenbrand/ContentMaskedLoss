@@ -1,0 +1,4 @@
+/data
+/VOC2012
+*.ipynb_checkpoints*
+fid/**/*.jpg
