@@ -27,11 +27,15 @@ coord = coord.to(device)
 
 criterion = nn.MSELoss()
 
-decoder_fns = ['renderer_models/renderer0.1999999999999999.pkl', 
-               'renderer_models/renderer0.09999999999999985.pkl', 
-               'renderer_models/renderer0.049999999999999864.pkl', 
-               'renderer_models/renderer0.01.pkl']
-decoder_cutoff = [10, 30, 65]
+decoder_fns = [
+               #'renderer_models/renderer0.05.pkl',
+               'renderer_models/renderer0.01.pkl'
+               #'renderer_models/renderer0.1999999999999999.pkl', 
+               #'renderer_models/renderer0.09999999999999985.pkl', 
+               #'renderer_models/renderer0.049999999999999864.pkl', 
+               #'renderer_models/renderer0.01.pkl'
+               ]
+decoder_cutoff = []#[50]#[10, 30, 65]
 decoders = []
 for decoder_fn in decoder_fns:
     dec = FCN()
@@ -182,7 +186,8 @@ class DDPG(object):
         elif self.loss_fcn == 'cm':
             #mask = get_l2_mask(gt)
 
-            reward = ((canvas0 - gt) ** 2 * mask).mean(1).mean(1).mean(1) - ((canvas1 - gt) ** 2  * mask).mean(1).mean(1).mean(1)
+            #reward = ((canvas0 - gt) ** 2 * mask).mean(1).mean(1).mean(1) - ((canvas1 - gt) ** 2  * mask).mean(1).mean(1).mean(1)
+            reward = ((canvas0 - gt) ** 2 * (mask + 0.1)).mean(1).mean(1).mean(1) - ((canvas1 - gt) ** 2  * (mask + 0.1)).mean(1).mean(1).mean(1)
         elif self.loss_fcn == 'cml1':
             #mask = get_l2_mask(gt)
 
@@ -193,6 +198,19 @@ class DDPG(object):
             l1_1[l1_1 > clip] = clip
 
             reward = (l1_0 * mask).mean(1).mean(1).mean(1) - (l1_1 * mask).mean(1).mean(1).mean(1)
+        elif self.loss_fcn == 'l1_penalized':
+            l1_0 = torch.abs(canvas0-gt)
+            l1_0[l1_0 > clip] = clip
+
+            l1_1 = torch.abs(canvas1-gt)
+            l1_1[l1_1 > clip] = clip
+
+            lam = 2.0
+
+            diff = l1_0 - l1_1
+            diff = diff * lam * (diff < 0) + diff * (diff > 0)
+
+            reward = diff.mean(1).mean(1).mean(1)
 
         coord_ = coord.expand(state.shape[0], 2, 128, 128)
         if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':

@@ -11,7 +11,7 @@ import datetime
 
 date_and_time = datetime.datetime.now()
 run_name = 'painter_' + date_and_time.strftime("%m_%d__%H_%M_%S")
-writer = TensorBoard('train_log_multiple_renderers/{}'.format(run_name))
+writer = TensorBoard('train_log_cats/{}'.format(run_name))
 
 if not os.path.exists('model'):
     os.mkdir('model')
@@ -30,20 +30,30 @@ def train(agent, env, evaluate):
     tot_reward = 0.
     observation = None
     noise_factor = args.noise_factor
+    imgs_used_from_file = 0
+
     while step <= train_times:
         step += 1
         episode_steps += 1
         # reset if it is the start of episode
         if observation is None:
             observation = env.reset()
-            agent.reset(observation, noise_factor)    
+            agent.reset(observation, noise_factor)
+
+            imgs_used_from_file += agent.batch_size
+            if (env.dataset == 'all' and imgs_used_from_file > env.env.train_num):
+                env.env.load_new_file()
+                print('loading a new file')
+                imgs_used_from_file = 0
+
         action = agent.select_action(observation, noise_factor=noise_factor)
         observation, reward, done, _ = env.step(action, episode_steps)
         agent.observe(reward, observation, done, step)
         if (episode_steps >= max_step and max_step):
             if step > args.warmup:
                 # [optional] evaluate
-                if episode > 0 and validate_interval > 0 and episode % validate_interval == 0:
+                #if episode > 0 and validate_interval > 0 and episode % validate_interval == 0:
+                if validate_interval > 0 and episode % validate_interval == 0:
                     reward, dist = evaluate(env, agent.select_action, debug=debug)
                     if debug: print('Step_{:07d}: mean_reward:{:.3f} mean_dist:{:.3f} var_dist:{:.3f}'.format(step - 1, np.mean(reward), np.mean(dist), np.var(dist)))
                     writer.add_scalar('validate/mean_reward', np.mean(reward), step)
@@ -55,7 +65,14 @@ def train(agent, env, evaluate):
             tot_Q = 0.
             tot_value_loss = 0.
             if step > args.warmup:
+                # if step < 10000 * max_step:
+                #     lr = (9e-4, 3e-3)
+                # elif step < 20000 * max_step:
+                #     lr = (3e-4, 9e-4)
+                # else:
+                #     lr = (9e-5, 3e-4)
                 lr = (3e-6, 1e-5)
+                #lr = (3e-7, 1e-6)
                 # if step < 10000 * max_step:
                 #     lr = (3e-4, 1e-3)
                 # elif step < 20000 * max_step:
@@ -92,17 +109,17 @@ if __name__ == "__main__":
     parser.add_argument('--noise_factor', default=0, type=float, help='noise level for parameter space noise')
     parser.add_argument('--validate_interval', default=50, type=int, help='how many episodes to perform a validation')
     parser.add_argument('--validate_episodes', default=5, type=int, help='how many episode to perform during validation')
-    parser.add_argument('--train_times', default=2000000, type=int, help='total traintimes')
+    parser.add_argument('--train_times', default=10000000, type=int, help='total traintimes')
     parser.add_argument('--episode_train_times', default=10, type=int, help='train times for each episode')    
     parser.add_argument('--resume', default=None, type=str, help='Resuming model path for testing')
     parser.add_argument('--output', default='./model', type=str, help='Path to directory to output models to')
     parser.add_argument('--debug', dest='debug', action='store_true', help='print some info')
     parser.add_argument('--seed', default=1234, type=int, help='random seed')
 
-    parser.add_argument('--loss_fcn', default='cml1', choices=['gan', 'l2', 'l1', 'cm', 'cml1'])
-    parser.add_argument('--canvas_color', default='white', choices=['white','black'])
+    parser.add_argument('--loss_fcn', default='cml1', choices=['gan', 'l2', 'l1', 'cm', 'cml1', 'l1_penalized'])
+    parser.add_argument('--canvas_color', default='white', choices=['white','black', 'none'])
     parser.add_argument('--renderer', default='renderer.pkl', type=str, help='Filename of renderer used to paint')
-    parser.add_argument('--dataset', default='celeba', choices=['celeba','pascal', 'sketchy'])
+    parser.add_argument('--dataset', default='celeba', choices=['celeba','pascal', 'sketchy', 'cats', 'all'])
     parser.add_argument('--use_multiple_renderers', default=False, type=bool, help='Use multiple neural renderers')
 
     args = parser.parse_args()    

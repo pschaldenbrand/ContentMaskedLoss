@@ -21,11 +21,16 @@ class fastenv():
             self.env.load_data_pascal()
         elif dataset == 'sketchy':
             self.env.load_data_sketchy()
+        elif dataset == 'cats':
+            self.env.load_data_cat()
+        elif dataset == 'all':
+            self.env.load_data_all()
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
         self.writer = writer
         self.test = False
         self.log = 0
+        self.dataset = dataset
 
     def save_image(self, log, step):
         for i in range(self.env_batch):
