@@ -84,20 +84,16 @@ def cal_trans(s, t):
     return (s.transpose(0, 3) * t).transpose(0, 3)
     
 class DDPG(object):
-    def __init__(self, batch_size=64, env_batch=1, max_step=40, \
-                 tau=0.001, discount=0.9, rmsize=800, \
-                 writer=None, resume=None, output_path=None, \
-                 loss_fcn='cml1', renderer_fn='renderer.pkl',
-                 use_multiple_renderers=False):
-
-        self.max_step = max_step
-        self.env_batch = env_batch
-        self.batch_size = batch_size
-        self.loss_fcn = loss_fcn
-        self.use_multiple_renderers = use_multiple_renderers
+    def __init__(self, opt, writer=None):
+        self.opt = opt
+        self.max_step = opt.max_step
+        self.env_batch = opt.env_batch
+        self.batch_size = opt.batch_size
+        self.loss_fcn = opt.loss_fcn
+        self.use_multiple_renderers = opt.use_multiple_renderers
 
         state_size = 9
-        if loss_fcn == 'cm' or loss_fcn == 'cml1':
+        if (opt.loss_fcn == 'cm' or opt.loss_fcn == 'cml1')  and self.opt.built_in_cm:
             state_size = 10
 
         self.actor = ResNet(state_size, 18, 13*n_strokes) # target, canvas, stepnum, coordconv 3 + 3 + 1 + 2
@@ -105,24 +101,24 @@ class DDPG(object):
         self.critic = ResNet_wobn(3 + state_size, 18, 1) # add the last canvas for better prediction
         self.critic_target = ResNet_wobn(3 + state_size, 18, 1) 
 
-        if not use_multiple_renderers:
-            Decoder.load_state_dict(torch.load(renderer_fn))
+        if not opt.use_multiple_renderers:
+            Decoder.load_state_dict(torch.load(opt.renderer))
 
         self.actor_optim  = Adam(self.actor.parameters(), lr=1e-2)
         self.critic_optim  = Adam(self.critic.parameters(), lr=1e-2)
 
-        if (resume != None):
-            self.load_weights(resume)
+        if (opt.resume != None):
+            self.load_weights(opt.resume)
 
         hard_update(self.actor_target, self.actor)
         hard_update(self.critic_target, self.critic)
         
         # Create replay buffer
-        self.memory = rpm(rmsize * max_step)
+        self.memory = rpm(opt.rmsize * opt.max_step)
 
         # Hyper-parameters
-        self.tau = tau
-        self.discount = discount
+        self.tau = opt.tau
+        self.discount = opt.discount
 
         # Tensorboard
         self.writer = writer
@@ -130,10 +126,10 @@ class DDPG(object):
         
         self.state = [None] * self.env_batch # Most recent state
         self.action = [None] * self.env_batch # Most recent action
-        self.choose_device()        
+        self.choose_device() 
 
     def play(self, state, target=False):
-        if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':
+        if (self.loss_fcn == 'cm' or self.loss_fcn == 'cml1') and self.opt.built_in_cm:
             state = torch.cat((state[:, :6].float() / 255,  #canvas and target \
                                state[:, 6:7].float() / 255, # mask \
                                state[:, 6+1:7+1].float() / self.max_step, # step num \
@@ -156,7 +152,7 @@ class DDPG(object):
             self.writer.add_scalar('train/gan_real', real, self.log)
             self.writer.add_scalar('train/gan_penal', penal, self.log)       
         
-    def evaluate(self, state, action, episode_num, target=False):
+    def evaluate(self, state, action, episode_num, mask=None, target=False):
         T = state[:, 6 : 7]
         gt = state[:, 3 : 6].float() / 255
         canvas0 = state[:, :3].float() / 255
@@ -165,7 +161,7 @@ class DDPG(object):
         else:
             canvas1 = decode(action, canvas0)
 
-        if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':
+        if (self.loss_fcn == 'cm' or self.loss_fcn == 'cml1')  and self.opt.built_in_cm:
             T = state[:, 6+1 : 7+1]
             mask = state[:, 6:7].float() / 255
 
@@ -213,7 +209,7 @@ class DDPG(object):
             reward = diff.mean(1).mean(1).mean(1)
 
         coord_ = coord.expand(state.shape[0], 2, 128, 128)
-        if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':
+        if (self.loss_fcn == 'cm' or self.loss_fcn == 'cml1')  and self.opt.built_in_cm:
             merged_state = torch.cat([canvas0, canvas1, gt, mask, (T + 1).float() / self.max_step, coord_], 1)
         else:
             merged_state = torch.cat([canvas0, canvas1, gt, (T + 1).float() / self.max_step, coord_], 1)
@@ -238,17 +234,17 @@ class DDPG(object):
             
         # Sample batch
         state, action, reward, \
-            next_state, terminal = self.memory.sample_batch(self.batch_size, device)
+            next_state, terminal, mask = self.memory.sample_batch(self.batch_size, device)
 
         if self.loss_fcn == 'gan':
             self.update_gan(next_state)
         
         with torch.no_grad():
             next_action = self.play(next_state, True)
-            target_q, _ = self.evaluate(next_state, next_action, episode_num, True)
+            target_q, _ = self.evaluate(next_state, next_action, episode_num, target=True, mask=mask)
             target_q = self.discount * ((1 - terminal.float()).view(-1, 1)) * target_q
                 
-        cur_q, step_reward = self.evaluate(state, action, episode_num)
+        cur_q, step_reward = self.evaluate(state, action, episode_num, mask=mask)
         target_q += step_reward.detach()
         
         value_loss = criterion(cur_q, target_q)
@@ -257,7 +253,7 @@ class DDPG(object):
         self.critic_optim.step()
 
         action = self.play(state)
-        pre_q, _ = self.evaluate(state.detach(), action, episode_num)
+        pre_q, _ = self.evaluate(state.detach(), action, episode_num, mask=mask)
         policy_loss = -pre_q.mean()
         self.actor.zero_grad()
         policy_loss.backward(retain_graph=True)
@@ -269,7 +265,7 @@ class DDPG(object):
 
         return -policy_loss, value_loss
 
-    def observe(self, reward, state, done, step):
+    def observe(self, reward, state, done, step, mask):
         # s0 = torch.tensor(self.state, device='cpu')
         s0 = self.state.cpu().clone().detach()
         a = to_tensor(self.action, "cpu")
@@ -277,8 +273,9 @@ class DDPG(object):
         # s1 = torch.tensor(state, device='cpu')
         s1 = state.cpu().clone().detach()
         d = to_tensor(done.astype('float32'), "cpu")
+        m = mask.cpu().clone().detach() if mask is not None else None
         for i in range(self.env_batch):
-            self.memory.append([s0[i], a[i], r[i], s1[i], d[i]])
+            self.memory.append([s0[i], a[i], r[i], s1[i], d[i], m[i] if mask is not None else None])
         self.state = state
 
     def noise_action(self, noise_factor, state, action):

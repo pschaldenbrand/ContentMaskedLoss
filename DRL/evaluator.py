@@ -14,7 +14,7 @@ class Evaluator(object):
         observation = None
         for episode in range(self.validate_episodes):
             # reset at the start of episode
-            observation = env.reset(test=True, episode=episode)
+            observation, mask = env.reset(test=True, episode=episode)
             episode_steps = 0
             episode_reward = 0.     
             assert observation is not None            
@@ -22,7 +22,7 @@ class Evaluator(object):
             episode_reward = np.zeros(self.env_batch)
             while (episode_steps < self.max_step or not self.max_step):
                 action = policy(observation)
-                observation, reward, done, (step_num) = env.step(action, episode_steps)
+                observation, reward, done, (step_num), mask = env.step(action, episode_steps)
                 episode_reward += reward
                 episode_steps += 1
                 env.save_image(self.log, episode_steps)

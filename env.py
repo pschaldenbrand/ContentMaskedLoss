@@ -36,15 +36,15 @@ convas_area = width * width
 # test_num = 0
 
 class Paint:
-    def __init__(self, batch_size, max_step, loss_fcn='cml1', canvas_color='white', use_multiple_renderers=False):
-        self.batch_size = batch_size
-        self.max_step = max_step
+    def __init__(self, opt):
+        self.batch_size = opt.env_batch
+        self.max_step = opt.max_step
         self.action_space = (13)
         self.observation_space = (self.batch_size, width, width, 7)
         self.test = False
-        self.canvas_color = canvas_color
-        self.loss_fcn = loss_fcn
-        self.use_multiple_renderers = use_multiple_renderers
+        self.canvas_color = opt.canvas_color
+        self.loss_fcn = opt.loss_fcn
+        self.use_multiple_renderers = opt.use_multiple_renderers
 
         self.img_train = []
         self.img_test = []
@@ -54,6 +54,8 @@ class Paint:
 
         self.train_num = 0
         self.test_num = 0
+
+        self.opt = opt
         
     def load_data_celeba(self):
         # CelebA
@@ -350,6 +352,7 @@ class Paint:
         self.test = test
         self.imgid = [0] * self.batch_size
         self.gt = torch.zeros([self.batch_size, 3, width, width], dtype=torch.uint8).to(device)
+        self.mask = None
         if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':
             self.mask = torch.zeros([self.batch_size, 1, width, width], dtype=torch.uint8).to(device)
         for i in range(self.batch_size):
@@ -390,9 +393,9 @@ class Paint:
         ob = []
         T = torch.ones([self.batch_size, 1, width, width], dtype=torch.uint8) * self.stepnum
         if self.loss_fcn == 'cm' or self.loss_fcn == 'cml1':
-            return torch.cat((self.canvas, self.gt, self.mask, T.to(device)), 1) # canvas, img, mask, T
+            return torch.cat((self.canvas, self.gt, self.mask, T.to(device)), 1), self.mask # canvas, img, mask, T
 
-        return torch.cat((self.canvas, self.gt, T.to(device)), 1) # canvas, img, T
+        return torch.cat((self.canvas, self.gt, T.to(device)), 1), None # canvas, img, T and no need for mask
 
     def cal_trans(self, s, t):
         return (s.transpose(0, 3) * t).transpose(0, 3)
@@ -403,10 +406,10 @@ class Paint:
         else:
             self.canvas = (decode(action, self.canvas.float() / 255) * 255).byte()
         self.stepnum += 1
-        ob = self.observation()
+        ob, mask = self.observation()
         done = (self.stepnum == self.max_step)
         reward = self.cal_reward() # np.array([0.] * self.batch_size)
-        return ob.detach(), reward, np.array([done] * self.batch_size), None
+        return ob.detach(), reward, np.array([done] * self.batch_size), None, mask
 
     def cal_dis(self):
         return (((self.canvas.float() - self.gt.float()) / 255) ** 2).mean(1).mean(1).mean(1)
