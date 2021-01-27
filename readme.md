@@ -40,3 +40,7 @@ Download the training data using `RobotPainter.ipynb` then run:
 ```
 $ python train.py --debug --batch_size=8 --max_step=120 --renderer=renderer.pkl --resume=pretrained_models/[gan|l1|l2|cm|cml1] --loss_fcn=[gan|l1|l2|cm|cml1]
 ```
+
+
+### Acknowledgement 
+We used the [code](https://github.com/megvii-research/ICCV2019-LearningToPaint) from [Huang et al. 2019](https://arxiv.org/abs/1903.04411) as starter code for this project.
