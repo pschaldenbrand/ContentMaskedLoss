@@ -1,14 +1,32 @@
-# Humanoid Painter
-Humanoid Painter is a reinforcement learning algorithm that learns to paint in a manor that is more similar to how humans paint than existing state-of-the-art methods.  The algorithm converts an image into a series of paint brush instructions.  The model receives the most reward when painting in regions that contain important features such as eyes, mouths, edges, etc.
+# Content Masked Loss 
 
-The brush stroke instructions can be fed to an [Arduino Braccio](https://store.arduino.cc/usa/tinkerkit-braccio) robotic arm to be painted onto a canvas.
+## AAAI'21 [arXiv pre-print](https://arxiv.org/abs/2012.10043)
+
+Human-Like Brush Stroke Planning in a Reinforcement Learning Painting Agent. 
 
 
-![Braccio Robot Arm Painter](image/braccio.jpg "Braccio Arm Paints Humanoid Painter Strokes")
+
+
+Content Masked Loss is an enhancement to the reward function in a reinforcement learning model that learns to paint in a manner that is more similar to how humans paint than existing state-of-the-art methods.  The algorithm converts an image into a series of paint brush instructions.  The model receives the most reward when painting in regions that contain important features such as eyes, mouths, edges, etc.
+
+
+## Content Masked Loss Results
+
+| Baseline      | Ours |
+| :----: | :----: |
+| L2      | Content Masked Loss     |
+| <img src="gifs/base12.gif" height="150" title="Baseline">   | <img src="gifs/ours12.gif" height="150" title="Ours">        |
+| <img src="gifs/base20.gif" height="150" title="Baseline">   | <img src="gifs/ours20.gif" height="150" title="Ours">        |
+
 
 ## Robot Painting
+The brush stroke instructions can be fed to an [Arduino Braccio](https://store.arduino.cc/usa/tinkerkit-braccio) robotic arm to be painted onto a canvas.
+
+<img src="image/braccio.jpg" height="250" alt="Braccio Arm Paints Humanoid Painter Strokes">
+
 Generate the stroke instructions then have your robot arm paint them to have results like this:
 ![A Photo of Director David Lynch](image/painting_example.png "A Painting of Director David Lynch")
+
 
 ### Download Pre-Trained Models
 The actor and renderer models can be downloaded from this box account.
