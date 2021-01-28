@@ -20,7 +20,7 @@ Content Masked Loss is an enhancement to the reward function in a reinforcement 
 
 
 ## Robot Painting
-The brush stroke instructions can be fed to an [Arduino Braccio](https://store.arduino.cc/usa/tinkerkit-braccio) robotic arm to be painted onto a canvas.
+The brush stroke instructions can be fed to an [Arduino Braccio](https://store.arduino.cc/usa/tinkerkit-braccio) robotic arm to be painted onto a canvas.  [Robot Arduino code is available here](https://create.arduino.cc/editor/skeeter_man/c5805760-4e8c-48e7-898d-a6abf2ed9097/preview)
 
 <img src="image/braccio.jpg" height="250" alt="Braccio Arm Paints Humanoid Painter Strokes">
 
@@ -39,13 +39,15 @@ $ python generate_actions.py --img=[image to paint] --max_step=[number of brush 
 --actor=pretrained_models/cml1/actor.pkl --renderer=renderer_constrained.pkl
 ```
 ### Run Arduino Braccio Code
-The load the Arduino with `paint.ino`.
+The load the Arduino with [code from here](https://create.arduino.cc/editor/skeeter_man/c5805760-4e8c-48e7-898d-a6abf2ed9097/preview).
 ### Send the instructions to the Robot Arm
 A python program parses the brush stroke instruction csv files and sends them to the robot arm:
 ```
 $ python arduino_paint.py
 ```
 By default, this script sends the instructions from `arduino_actions/actions_all.csv`, but it can be changed to a file of your choice with command-line argument `--instructionsfile`
+
+See [AniPainter](https://github.com/pschaldenbrand/AniPainter) for more robot painting fun!
 
 ## Train the model yourself
 Monitor the training progress using: `$ tensorboard --logdir=train_log --port=6006`
