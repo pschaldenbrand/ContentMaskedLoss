@@ -1,5 +1,9 @@
 # Content Masked Loss 
 
+Peter Schaldenbrand, Jean Oh<br/>
+Carnegie Mellon University<br/>
+2021
+
 ## AAAI'21 [arXiv pre-print](https://arxiv.org/abs/2012.10043)
 
 Human-Like Brush Stroke Planning in a Reinforcement Learning Painting Agent. 
