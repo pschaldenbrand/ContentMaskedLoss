@@ -64,3 +64,5 @@ $ python train.py --debug --batch_size=8 --max_step=120 --renderer=renderer.pkl 
 
 ### Acknowledgement 
 We used the [code](https://github.com/megvii-research/ICCV2019-LearningToPaint) from [Huang et al. 2019](https://arxiv.org/abs/1903.04411) as starter code for this project.
+
+Frechet Inception Distance code from [Heusel et al. 2017](https://github.com/bioinf-jku/TTUR)
