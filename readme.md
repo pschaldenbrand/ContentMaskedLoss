@@ -66,6 +66,28 @@ Download the training data using `RobotPainter.ipynb` then run:
 $ python train.py --debug --batch_size=8 --max_step=120 --renderer=renderer.pkl --resume=pretrained_models/[gan|l1|l2|cm|cml1] --loss_fcn=[gan|l1|l2|cm|cml1]
 ```
 
+## Citation
+
+Please cite our paper:
+```
+@inproceedings{schaldenbrand2021contentMaskedLoss,
+  title={Content masked loss: Human-like brush stroke planning in a reinforcement learning painting agent},
+  author={Schaldenbrand, Peter and Oh, Jean},
+  booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
+  volume={35},
+  number={1},
+  pages={505--512},
+  year={2021}
+}
+```
+
+Images in the `neisley` repository are provided courtesy of Nick Eisley. Please give him credit:
+```
+@MISC{nickEisley,
+    author={{Nicholas Eisley}},
+    url={http://neisley.com/}
+}
+```
 
 ### Acknowledgement 
 We used the [code](https://github.com/megvii-research/ICCV2019-LearningToPaint) from [Huang et al. 2019](https://arxiv.org/abs/1903.04411) as starter code for this project.
