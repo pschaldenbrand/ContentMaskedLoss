@@ -9,6 +9,7 @@ Carnegie Mellon University<br/>
 Human-Like Brush Stroke Planning in a Reinforcement Learning Painting Agent. 
 
 
+## *** If you are interested in Robot Painting, we highly recommend using our newer work, FRIDA: [https://github.com/pschaldenbrand/Frida](https://github.com/pschaldenbrand/Frida)
 
 
 Content Masked Loss is an enhancement to the reward function in a reinforcement learning model that learns to paint in a manner that is more similar to how humans paint than existing state-of-the-art methods.  The algorithm converts an image into a series of paint brush instructions.  The model receives the most reward when painting in regions that contain important features such as eyes, mouths, edges, etc.
